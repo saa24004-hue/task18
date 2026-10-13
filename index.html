@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学校図書室 貸出・返却システム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            background-color: #f0fdf4; /* Light green background */
+        }
+        .book-card {
+            transition: transform 0.2s;
+        }
+        .book-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Header -->
+    <header class="bg-green-500 text-white p-4 shadow-md flex justify-between items-center">
+        <h1 class="text-2xl font-bold">🏫 学校図書室アプリ</h1>
+        <div id="auth-container">
+            <!-- Auth buttons will be rendered here -->
+            <button id="login-btn" class="bg-white text-green-500 px-4 py-2 rounded-full font-bold shadow hover:bg-gray-100 transition hidden">Googleでログイン</button>
+            <div id="user-info" class="flex items-center gap-4 hidden">
+                <span id="user-name" class="font-medium"></span>
+                <button id="logout-btn" class="bg-green-700 text-white px-4 py-2 rounded-full text-sm hover:bg-green-800 transition">ログアウト</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-4 max-w-5xl mt-6">
+        
+        <!-- Loading State -->
+        <div id="loading-spinner" class="text-center py-10">
+            <p class="text-gray-500 text-lg">読み込み中...</p>
+        </div>
+
+        <!-- Notification Area -->
+        <div id="notification" class="hidden mb-4 p-4 rounded-lg shadow text-center"></div>
+
+        <!-- Book List -->
+        <div id="book-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 hidden">
+            <!-- Book cards will be dynamically injected here -->
+        </div>
+
+    </main>
+
+    <!-- 
+        Firebase SDK (v9/v11 Module pattern)
+        Note: The user requested Firebase. In this Immersive environment, 
+        we usually provide a specific config. For a standalone deployable file,
+        you need your own config. I will use the provided environment variables if available,
+        otherwise prompt to add them.
+    -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, getDocs, doc, updateDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Configuration ---
+        // INSTRUCTIONS FOR GITHUB/FIREBASE DEPLOYMENT:
+        // 1. Create a Firebase project at console.firebase.google.com
+        // 2. Enable "Google" as a Sign-in provider in Authentication.
+        // 3. Create a Firestore Database (Start in test mode or set up rules).
+        // 4. Replace the config object below with your Firebase project config.
+        
+        let firebaseConfig = {
+            // REPLACE THESE WITH YOUR ACTUAL FIREBASE CONFIG
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Environment overrides for this specific platform (if running in the IDE)
+        if (typeof __firebase_config !== 'undefined') {
+            firebaseConfig = JSON.parse(__firebase_config);
+        }
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'library-app-default';
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        // State
+        let currentUser = null;
+        let booksData = [];
+
+        // UI Elements
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userInfo = document.getElementById('user-info');
+        const userNameSpan = document.getElementById('user-name');
+        const bookListContainer = document.getElementById('book-list');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const notification = document.getElementById('notification');
+
+        // Dummy data for initialization
+        const initialBooks = [
+            { id: "book1", title: "星の王子さま", author: "サン＝テグジュペリ", status: "available", borrowerId: null, borrowerName: null },
+            { id: "book2", title: "吾輩は猫である", author: "夏目漱石", status: "available", borrowerId: null, borrowerName: null },
+            { id: "book3", title: "ハリー・ポッターと賢者の石", author: "J.K.ローリング", status: "available", borrowerId: null, borrowerName: null },
+            { id: "book4", title: "注文の多い料理店", author: "宮沢賢治", status: "available", borrowerId: null, borrowerName: null },
+            { id: "book5", title: "はらぺこあおむし", author: "エリック・カール", status: "available", borrowerId: null, borrowerName: null }
+        ];
+
+        // Ensure collection path follows RULES (using public data path for shared library)
+        const booksCollectionPath = collection(db, 'artifacts', appId, 'public', 'data', 'books');
+
+        async function initializeDatabase() {
+            try {
+                // We only do this if there are no books yet.
+                // Note: In a real app, you wouldn't run this client-side every time.
+                const querySnapshot = await getDocs(booksCollectionPath);
+                if (querySnapshot.empty && currentUser) {
+                    console.log("Initializing dummy data...");
+                    for (const book of initialBooks) {
+                        const bookDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'books', book.id);
+                        await setDoc(bookDocRef, book);
+                    }
+                }
+            } catch (error) {
+                console.error("Error initializing DB:", error);
+            }
+        }
+
+        // Auth Listeners
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                userNameSpan.textContent = user.displayName || "ゲスト";
+                loginBtn.classList.add('hidden');
+                userInfo.classList.remove('hidden');
+                
+                // Init DB once logged in if needed
+                await initializeDatabase();
+                
+                // Start listening to real-time updates
+                listenToBooks();
+            } else {
+                currentUser = null;
+                userNameSpan.textContent = "";
+                loginBtn.classList.remove('hidden');
+                userInfo.classList.add('hidden');
+                bookListContainer.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10 bg-white rounded-xl shadow">ログインすると図書リストが表示されます。</div>';
+                loadingSpinner.classList.add('hidden');
+                bookListContainer.classList.remove('hidden');
+            }
+        });
+
+        loginBtn.addEventListener('click', async () => {
+             // Use Custom Token if available (for the IDE), otherwise use Popup (for deployed app)
+            if (typeof __initial_auth_token !== 'undefined') {
+                try {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } catch(e) {
+                   await signInAnonymously(auth);
+                }
+            } else {
+                try {
+                    await signInWithPopup(auth, provider);
+                } catch (error) {
+                    console.error("Login failed", error);
+                    showNotification("ログインに失敗しました。", "error");
+                }
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            signOut(auth);
+        });
+
+        function listenToBooks() {
+            loadingSpinner.classList.remove('hidden');
+            bookListContainer.classList.add('hidden');
+
+            onSnapshot(booksCollectionPath, (snapshot) => {
+                booksData = [];
+                snapshot.forEach((doc) => {
+                    booksData.push({ id: doc.id, ...doc.data() });
+                });
+                renderBooks();
+                loadingSpinner.classList.add('hidden');
+                bookListContainer.classList.remove('hidden');
+            }, (error) => {
+                console.error("Error fetching books: ", error);
+                showNotification("データの取得に失敗しました。", "error");
+                loadingSpinner.classList.add('hidden');
+            });
+        }
+
+        function renderBooks() {
+            bookListContainer.innerHTML = '';
+            
+            if (booksData.length === 0) {
+                 bookListContainer.innerHTML = '<p class="col-span-full text-center text-gray-500">本が登録されていません。</p>';
+                 return;
+            }
+
+            // Sort books by title locally
+            booksData.sort((a, b) => a.title.localeCompare(b.title));
+
+            booksData.forEach(book => {
+                const isAvailable = book.status === "available";
+                const isBorrowedByMe = currentUser && book.borrowerId === currentUser.uid;
+
+                let statusBadge = '';
+                let actionButton = '';
+
+                if (isAvailable) {
+                    statusBadge = `<span class="px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full">貸出可</span>`;
+                    actionButton = `<button onclick="window.borrowBook('${book.id}')" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded mt-4 transition">借りる</button>`;
+                } else {
+                    if (isBorrowedByMe) {
+                        statusBadge = `<span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-bold rounded-full">あなたが貸出中</span>`;
+                        actionButton = `<button onclick="window.returnBook('${book.id}')" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded mt-4 transition">返却する</button>`;
+                    } else {
+                        statusBadge = `<span class="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full">貸出中 (${book.borrowerName || '誰か'})</span>`;
+                        actionButton = `<button disabled class="w-full bg-gray-300 text-gray-500 font-bold py-2 px-4 rounded mt-4 cursor-not-allowed">貸出中</button>`;
+                    }
+                }
+
+                const cardHtml = `
+                    <div class="book-card bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-bold text-lg text-gray-800 leading-tight">${escapeHTML(book.title)}</h3>
+                                ${statusBadge}
+                            </div>
+                            <p class="text-sm text-gray-500 mb-4">著者: ${escapeHTML(book.author)}</p>
+                        </div>
+                        ${currentUser ? actionButton : '<p class="text-xs text-center text-gray-400 mt-4">ログインしてアクション</p>'}
+                    </div>
+                `;
+                bookListContainer.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        }
+
+        window.borrowBook = async (bookId) => {
+            if (!currentUser) return;
+            const bookRef = doc(db, 'artifacts', appId, 'public', 'data', 'books', bookId);
+            
+            try {
+                await updateDoc(bookRef, {
+                    status: "borrowed",
+                    borrowerId: currentUser.uid,
+                    borrowerName: currentUser.displayName || "名無しさん"
+                });
+                showNotification("本を借りました！", "success");
+            } catch (error) {
+                console.error("Error borrowing book:", error);
+                showNotification("エラーが発生しました。", "error");
+            }
+        };
+
+        window.returnBook = async (bookId) => {
+            if (!currentUser) return;
+            const bookRef = doc(db, 'artifacts', appId, 'public', 'data', 'books', bookId);
+            
+            try {
+                await updateDoc(bookRef, {
+                    status: "available",
+                    borrowerId: null,
+                    borrowerName: null
+                });
+                showNotification("本を返却しました！", "success");
+            } catch (error) {
+                console.error("Error returning book:", error);
+                showNotification("エラーが発生しました。", "error");
+            }
+        };
+
+        // Utility functions
+        function showNotification(message, type = "success") {
+            notification.textContent = message;
+            notification.className = `mb-4 p-4 rounded-lg shadow text-center font-bold text-white ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+            notification.classList.remove('hidden');
+            
+            setTimeout(() => {
+                notification.classList.add('hidden');
+            }, 3000);
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag] || tag)
+            );
+        }
+        
+        // Initial setup for unauthenticated state if needed (usually handled by onAuthStateChanged)
+        if(!currentUser) {
+           loadingSpinner.classList.add('hidden');
+           bookListContainer.classList.remove('hidden');
+           bookListContainer.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10 bg-white rounded-xl shadow">ログインすると図書リストが表示されます。</div>';
+        }
+
+    </script>
+</body>
+</html>
