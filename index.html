@@ -3,90 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>学校図書室 貸出・返却システム</title>
+    <title>学校図書室アプリ</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'M PLUS Rounded 1c', sans-serif;
-            background-color: #f0fdf4; /* Light green background */
+            background-color: #f0fdf4; /* Tailwind green-50 */
         }
-        .book-card {
-            transition: transform 0.2s;
+        /* Custom scrollbar for better appearance */
+        ::-webkit-scrollbar {
+            width: 8px;
         }
-        .book-card:hover {
-            transform: translateY(-5px);
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a7f3d0; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #34d399; 
         }
     </style>
 </head>
-<body class="text-gray-800">
+<body class="text-gray-800 min-h-screen flex flex-col">
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 hidden transition-opacity duration-300 opacity-0">
+        <div id="toast-message" class="px-6 py-3 rounded-full shadow-lg font-bold text-white text-sm text-center min-w-[200px]">
+            Notification
+        </div>
+    </div>
 
     <!-- Header -->
-    <header class="bg-green-500 text-white p-4 shadow-md flex justify-between items-center">
-        <h1 class="text-2xl font-bold">🏫 学校図書室アプリ</h1>
-        <div id="auth-container">
-            <!-- Auth buttons will be rendered here -->
-            <button id="login-btn" class="bg-white text-green-500 px-4 py-2 rounded-full font-bold shadow hover:bg-gray-100 transition hidden">Googleでログイン</button>
-            <div id="user-info" class="flex items-center gap-4 hidden">
-                <span id="user-name" class="font-medium"></span>
-                <button id="logout-btn" class="bg-green-700 text-white px-4 py-2 rounded-full text-sm hover:bg-green-800 transition">ログアウト</button>
+    <header class="bg-emerald-600 text-white shadow-md relative z-10">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-emerald-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                <h1 class="text-2xl font-bold tracking-wide">学校図書室</h1>
+            </div>
+            
+            <!-- User Info (Hidden initially) -->
+            <div id="user-menu" class="hidden flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <img id="user-avatar" src="" alt="avatar" class="w-8 h-8 rounded-full border-2 border-emerald-300 hidden sm:block bg-emerald-200">
+                    <span id="user-name-display" class="font-medium text-sm sm:text-base hidden sm:block"></span>
+                </div>
+                <button id="logout-btn" class="bg-emerald-700 hover:bg-emerald-800 text-white text-sm px-4 py-2 rounded-full transition shadow flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    ログアウト
+                </button>
             </div>
         </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="container mx-auto p-4 max-w-5xl mt-6">
+    <main class="flex-grow w-full max-w-4xl mx-auto p-4 sm:p-6 flex flex-col relative">
         
-        <!-- Loading State -->
-        <div id="loading-spinner" class="text-center py-10">
-            <p class="text-gray-500 text-lg">読み込み中...</p>
+        <!-- === LOGIN SECTION === -->
+        <div id="login-section" class="flex-grow flex flex-col items-center justify-center py-12">
+            <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-emerald-50">
+                <div class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">ログインが必要です</h2>
+                <p class="text-gray-500 mb-8 text-sm">図書を借りたり返したりするには、Googleアカウントでログインしてください。</p>
+                <button id="login-btn" class="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-3 px-4 rounded-xl shadow-sm transition flex items-center justify-center gap-3">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" class="w-5 h-5">
+                    Googleでログイン
+                </button>
+            </div>
         </div>
 
-        <!-- Notification Area -->
-        <div id="notification" class="hidden mb-4 p-4 rounded-lg shadow text-center"></div>
+        <!-- === APP SECTION (Hidden initially) === -->
+        <div id="app-section" class="hidden flex-col gap-8 w-full">
+            
+            <!-- Borrow Form -->
+            <section class="bg-white rounded-2xl shadow-md border border-emerald-100 p-5 sm:p-6">
+                <h2 class="text-xl font-bold text-emerald-700 mb-4 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    新しく本を借りる
+                </h2>
+                <form id="borrow-form" class="flex flex-col sm:flex-row gap-4 items-end">
+                    <div class="flex-grow w-full">
+                        <label for="book-title" class="block text-sm font-bold text-gray-700 mb-1">本のタイトル <span class="text-red-500">*</span></label>
+                        <input type="text" id="book-title" required placeholder="例: 星の王子さま" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition">
+                    </div>
+                    <div class="flex-grow w-full">
+                        <label for="borrower-name" class="block text-sm font-bold text-gray-700 mb-1">借りる人の名前 <span class="text-red-500">*</span></label>
+                        <input type="text" id="borrower-name" required placeholder="例: 山田 太郎" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition">
+                    </div>
+                    <button type="submit" id="submit-btn" class="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 sm:py-2.5 px-6 rounded-lg shadow transition whitespace-nowrap">
+                        貸出を記録する
+                    </button>
+                </form>
+            </section>
 
-        <!-- Book List -->
-        <div id="book-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 hidden">
-            <!-- Book cards will be dynamically injected here -->
+            <!-- Borrowed Books List -->
+            <section>
+                <div class="flex justify-between items-center mb-4 px-1">
+                    <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                        現在貸出中の本
+                    </h2>
+                    <span id="book-count" class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">0 冊</span>
+                </div>
+                
+                <div id="loading-indicator" class="text-center py-10">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mb-2"></div>
+                    <p class="text-gray-500 text-sm">データを読み込んでいます...</p>
+                </div>
+
+                <div id="books-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4 hidden">
+                    <!-- Books will be rendered here dynamically -->
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="hidden bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" /></svg>
+                    <p class="text-gray-500 font-medium">現在貸出中の本はありません。</p>
+                </div>
+            </section>
         </div>
-
     </main>
 
-    <!-- 
-        Firebase SDK (v9/v11 Module pattern)
-        Note: The user requested Firebase. In this Immersive environment, 
-        we usually provide a specific config. For a standalone deployable file,
-        you need your own config. I will use the provided environment variables if available,
-        otherwise prompt to add them.
-    -->
     <script type="module">
+        // Import Firebase v11 modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, getDocs, doc, updateDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Configuration ---
-        // INSTRUCTIONS FOR GITHUB/FIREBASE DEPLOYMENT:
-        // 1. Create a Firebase project at console.firebase.google.com
-        // 2. Enable "Google" as a Sign-in provider in Authentication.
-        // 3. Create a Firestore Database (Start in test mode or set up rules).
-        // 4. Replace the config object below with your Firebase project config.
-        
-        let firebaseConfig = {
-            // REPLACE THESE WITH YOUR ACTUAL FIREBASE CONFIG
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.appspot.com",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
+        // === 必須: 指定されたFirebase Config (ダミー文字列への置き換えなし) ===
+        const firebaseConfig = {
+            apiKey: "AIzaSyCDswj7wf63l1NA9YuJOVUdyr6spn4w4gg",
+            authDomain: "task19-6ea86.firebaseapp.com",
+            projectId: "task19-6ea86",
+            storageBucket: "task19-6ea86.firebasestorage.app",
+            messagingSenderId: "1033609673870",
+            appId: "1:1033609673870:web:9f78ebc360a6abf63b9ddf"
         };
-
-        // Environment overrides for this specific platform (if running in the IDE)
-        if (typeof __firebase_config !== 'undefined') {
-            firebaseConfig = JSON.parse(__firebase_config);
-        }
-        
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'library-app-default';
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
@@ -94,224 +153,247 @@
         const db = getFirestore(app);
         const provider = new GoogleAuthProvider();
 
-        // State
-        let currentUser = null;
-        let booksData = [];
+        // 共有データベースのためのパス設定
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'school-library-app';
+        const booksCollection = collection(db, 'artifacts', appId, 'public', 'data', 'borrowed_books');
 
-        // UI Elements
+        // State Variables
+        let currentUser = null;
+        let unsubscribeSnapshot = null;
+
+        // DOM Elements
+        const loginSection = document.getElementById('login-section');
+        const appSection = document.getElementById('app-section');
         const loginBtn = document.getElementById('login-btn');
         const logoutBtn = document.getElementById('logout-btn');
-        const userInfo = document.getElementById('user-info');
-        const userNameSpan = document.getElementById('user-name');
-        const bookListContainer = document.getElementById('book-list');
-        const loadingSpinner = document.getElementById('loading-spinner');
-        const notification = document.getElementById('notification');
+        const userMenu = document.getElementById('user-menu');
+        const userNameDisplay = document.getElementById('user-name-display');
+        const userAvatar = document.getElementById('user-avatar');
+        
+        const borrowForm = document.getElementById('borrow-form');
+        const titleInput = document.getElementById('book-title');
+        const nameInput = document.getElementById('borrower-name');
+        const submitBtn = document.getElementById('submit-btn');
+        
+        const booksContainer = document.getElementById('books-container');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const emptyState = document.getElementById('empty-state');
+        const bookCountSpan = document.getElementById('book-count');
+        
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
 
-        // Dummy data for initialization
-        const initialBooks = [
-            { id: "book1", title: "星の王子さま", author: "サン＝テグジュペリ", status: "available", borrowerId: null, borrowerName: null },
-            { id: "book2", title: "吾輩は猫である", author: "夏目漱石", status: "available", borrowerId: null, borrowerName: null },
-            { id: "book3", title: "ハリー・ポッターと賢者の石", author: "J.K.ローリング", status: "available", borrowerId: null, borrowerName: null },
-            { id: "book4", title: "注文の多い料理店", author: "宮沢賢治", status: "available", borrowerId: null, borrowerName: null },
-            { id: "book5", title: "はらぺこあおむし", author: "エリック・カール", status: "available", borrowerId: null, borrowerName: null }
-        ];
+        // --- Custom Toast Notification ---
+        function showToast(message, type = 'success') {
+            toastMessage.textContent = message;
+            toastMessage.className = `px-6 py-3 rounded-full shadow-lg font-bold text-white text-sm text-center min-w-[200px] ${type === 'success' ? 'bg-emerald-600' : 'bg-red-500'}`;
+            
+            toast.classList.remove('hidden');
+            // Trigger reflow for animation
+            void toast.offsetWidth; 
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
 
-        // Ensure collection path follows RULES (using public data path for shared library)
-        const booksCollectionPath = collection(db, 'artifacts', appId, 'public', 'data', 'books');
-
-        async function initializeDatabase() {
-            try {
-                // We only do this if there are no books yet.
-                // Note: In a real app, you wouldn't run this client-side every time.
-                const querySnapshot = await getDocs(booksCollectionPath);
-                if (querySnapshot.empty && currentUser) {
-                    console.log("Initializing dummy data...");
-                    for (const book of initialBooks) {
-                        const bookDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'books', book.id);
-                        await setDoc(bookDocRef, book);
-                    }
-                }
-            } catch (error) {
-                console.error("Error initializing DB:", error);
-            }
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.classList.add('hidden'), 300);
+            }, 3000);
         }
 
-        // Auth Listeners
-        onAuthStateChanged(auth, async (user) => {
+        // --- Authentication Logic ---
+        onAuthStateChanged(auth, (user) => {
             if (user) {
+                // Logged In
                 currentUser = user;
-                userNameSpan.textContent = user.displayName || "ゲスト";
-                loginBtn.classList.add('hidden');
-                userInfo.classList.remove('hidden');
                 
-                // Init DB once logged in if needed
-                await initializeDatabase();
+                // Update UI
+                loginSection.classList.add('hidden');
+                appSection.classList.remove('hidden');
+                appSection.classList.add('flex');
+                userMenu.classList.remove('hidden');
                 
-                // Start listening to real-time updates
-                listenToBooks();
+                userNameDisplay.textContent = user.displayName || 'ユーザー';
+                if (user.photoURL) {
+                    userAvatar.src = user.photoURL;
+                    userAvatar.classList.remove('hidden');
+                }
+                
+                // Auto-fill borrower name if empty
+                if (!nameInput.value) {
+                    nameInput.value = user.displayName || '';
+                }
+
+                // Load Data
+                fetchBooks();
             } else {
+                // Logged Out
                 currentUser = null;
-                userNameSpan.textContent = "";
-                loginBtn.classList.remove('hidden');
-                userInfo.classList.add('hidden');
-                bookListContainer.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10 bg-white rounded-xl shadow">ログインすると図書リストが表示されます。</div>';
-                loadingSpinner.classList.add('hidden');
-                bookListContainer.classList.remove('hidden');
+                
+                // Update UI
+                loginSection.classList.remove('hidden');
+                appSection.classList.add('hidden');
+                appSection.classList.remove('flex');
+                userMenu.classList.add('hidden');
+                
+                // Clean up listener
+                if (unsubscribeSnapshot) {
+                    unsubscribeSnapshot();
+                    unsubscribeSnapshot = null;
+                }
             }
         });
 
         loginBtn.addEventListener('click', async () => {
-             // Use Custom Token if available (for the IDE), otherwise use Popup (for deployed app)
-            if (typeof __initial_auth_token !== 'undefined') {
-                try {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } catch(e) {
-                   await signInAnonymously(auth);
-                }
-            } else {
-                try {
-                    await signInWithPopup(auth, provider);
-                } catch (error) {
-                    console.error("Login failed", error);
-                    showNotification("ログインに失敗しました。", "error");
-                }
-            }
-        });
-
-        logoutBtn.addEventListener('click', () => {
-            signOut(auth);
-        });
-
-        function listenToBooks() {
-            loadingSpinner.classList.remove('hidden');
-            bookListContainer.classList.add('hidden');
-
-            onSnapshot(booksCollectionPath, (snapshot) => {
-                booksData = [];
-                snapshot.forEach((doc) => {
-                    booksData.push({ id: doc.id, ...doc.data() });
-                });
-                renderBooks();
-                loadingSpinner.classList.add('hidden');
-                bookListContainer.classList.remove('hidden');
-            }, (error) => {
-                console.error("Error fetching books: ", error);
-                showNotification("データの取得に失敗しました。", "error");
-                loadingSpinner.classList.add('hidden');
-            });
-        }
-
-        function renderBooks() {
-            bookListContainer.innerHTML = '';
-            
-            if (booksData.length === 0) {
-                 bookListContainer.innerHTML = '<p class="col-span-full text-center text-gray-500">本が登録されていません。</p>';
-                 return;
-            }
-
-            // Sort books by title locally
-            booksData.sort((a, b) => a.title.localeCompare(b.title));
-
-            booksData.forEach(book => {
-                const isAvailable = book.status === "available";
-                const isBorrowedByMe = currentUser && book.borrowerId === currentUser.uid;
-
-                let statusBadge = '';
-                let actionButton = '';
-
-                if (isAvailable) {
-                    statusBadge = `<span class="px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full">貸出可</span>`;
-                    actionButton = `<button onclick="window.borrowBook('${book.id}')" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded mt-4 transition">借りる</button>`;
-                } else {
-                    if (isBorrowedByMe) {
-                        statusBadge = `<span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-bold rounded-full">あなたが貸出中</span>`;
-                        actionButton = `<button onclick="window.returnBook('${book.id}')" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded mt-4 transition">返却する</button>`;
-                    } else {
-                        statusBadge = `<span class="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full">貸出中 (${book.borrowerName || '誰か'})</span>`;
-                        actionButton = `<button disabled class="w-full bg-gray-300 text-gray-500 font-bold py-2 px-4 rounded mt-4 cursor-not-allowed">貸出中</button>`;
-                    }
-                }
-
-                const cardHtml = `
-                    <div class="book-card bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col justify-between">
-                        <div>
-                            <div class="flex justify-between items-start mb-2">
-                                <h3 class="font-bold text-lg text-gray-800 leading-tight">${escapeHTML(book.title)}</h3>
-                                ${statusBadge}
-                            </div>
-                            <p class="text-sm text-gray-500 mb-4">著者: ${escapeHTML(book.author)}</p>
-                        </div>
-                        ${currentUser ? actionButton : '<p class="text-xs text-center text-gray-400 mt-4">ログインしてアクション</p>'}
-                    </div>
-                `;
-                bookListContainer.insertAdjacentHTML('beforeend', cardHtml);
-            });
-        }
-
-        window.borrowBook = async (bookId) => {
-            if (!currentUser) return;
-            const bookRef = doc(db, 'artifacts', appId, 'public', 'data', 'books', bookId);
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<div class="animate-spin h-5 w-5 border-2 border-emerald-500 border-t-transparent rounded-full mr-2"></div> ログイン中...';
             
             try {
-                await updateDoc(bookRef, {
-                    status: "borrowed",
-                    borrowerId: currentUser.uid,
-                    borrowerName: currentUser.displayName || "名無しさん"
-                });
-                showNotification("本を借りました！", "success");
+                // Support for collaborative IDE environments natively providing a token
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    // Standard Google Login
+                    await signInWithPopup(auth, provider);
+                }
             } catch (error) {
-                console.error("Error borrowing book:", error);
-                showNotification("エラーが発生しました。", "error");
+                console.error("Login Error:", error);
+                showToast("ログインに失敗しました。", "error");
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" class="w-5 h-5"> Googleでログイン';
             }
-        };
+        });
 
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                showToast("ログアウトしました");
+            } catch (error) {
+                console.error("Logout Error:", error);
+            }
+        });
+
+        // --- Firestore Logic ---
+        function fetchBooks() {
+            loadingIndicator.classList.remove('hidden');
+            booksContainer.classList.add('hidden');
+            emptyState.classList.add('hidden');
+
+            // Real-time listener without complex queries to comply with rules
+            unsubscribeSnapshot = onSnapshot(booksCollection, (snapshot) => {
+                const books = [];
+                snapshot.forEach((doc) => {
+                    books.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Sort locally by date (newest first)
+                books.sort((a, b) => b.timestamp - a.timestamp);
+                
+                renderBooks(books);
+                
+                loadingIndicator.classList.add('hidden');
+                if (books.length === 0) {
+                    emptyState.classList.remove('hidden');
+                    booksContainer.classList.add('hidden');
+                } else {
+                    emptyState.classList.add('hidden');
+                    booksContainer.classList.remove('hidden');
+                }
+                
+                bookCountSpan.textContent = `${books.length} 冊`;
+            }, (error) => {
+                console.error("Fetch error:", error);
+                showToast("データの取得に失敗しました", "error");
+                loadingIndicator.classList.add('hidden');
+            });
+        }
+
+        // Add a new book loan
+        borrowForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const title = titleInput.value.trim();
+            const borrowerName = nameInput.value.trim();
+
+            if (!title || !borrowerName) return;
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '登録中...';
+            submitBtn.classList.add('opacity-75');
+
+            try {
+                await addDoc(booksCollection, {
+                    title: title,
+                    borrowerName: borrowerName,
+                    borrowerUid: currentUser.uid,
+                    timestamp: Date.now()
+                });
+                
+                showToast("貸出を記録しました！");
+                titleInput.value = ''; // Reset title, keep name
+                titleInput.focus();
+            } catch (error) {
+                console.error("Add error:", error);
+                showToast("登録に失敗しました", "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '貸出を記録する';
+                submitBtn.classList.remove('opacity-75');
+            }
+        });
+
+        // Delete (Return) a book
         window.returnBook = async (bookId) => {
             if (!currentUser) return;
-            const bookRef = doc(db, 'artifacts', appId, 'public', 'data', 'books', bookId);
             
             try {
-                await updateDoc(bookRef, {
-                    status: "available",
-                    borrowerId: null,
-                    borrowerName: null
-                });
-                showNotification("本を返却しました！", "success");
+                const bookDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'borrowed_books', bookId);
+                await deleteDoc(bookDocRef);
+                showToast("本を返却しました");
             } catch (error) {
-                console.error("Error returning book:", error);
-                showNotification("エラーが発生しました。", "error");
+                console.error("Return error:", error);
+                showToast("返却処理に失敗しました", "error");
             }
         };
 
-        // Utility functions
-        function showNotification(message, type = "success") {
-            notification.textContent = message;
-            notification.className = `mb-4 p-4 rounded-lg shadow text-center font-bold text-white ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
-            notification.classList.remove('hidden');
-            
-            setTimeout(() => {
-                notification.classList.add('hidden');
-            }, 3000);
-        }
-
+        // --- Render UI ---
         function escapeHTML(str) {
-            return str.replace(/[&<>'"]/g, 
-                tag => ({
-                    '&': '&amp;',
-                    '<': '&lt;',
-                    '>': '&gt;',
-                    "'": '&#39;',
-                    '"': '&quot;'
-                }[tag] || tag)
-            );
-        }
-        
-        // Initial setup for unauthenticated state if needed (usually handled by onAuthStateChanged)
-        if(!currentUser) {
-           loadingSpinner.classList.add('hidden');
-           bookListContainer.classList.remove('hidden');
-           bookListContainer.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10 bg-white rounded-xl shadow">ログインすると図書リストが表示されます。</div>';
+            return String(str).replace(/[&<>'"]/g, match => {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[match];
+            });
         }
 
+        function renderBooks(books) {
+            booksContainer.innerHTML = '';
+            
+            books.forEach(book => {
+                // Check if current user is the one who borrowed it (to show a slightly different visual or allow specific actions, though anyone can return in this simple version)
+                const isMyBorrow = book.borrowerUid === currentUser.uid;
+                
+                const dateObj = new Date(book.timestamp);
+                const dateStr = `${dateObj.getMonth()+1}/${dateObj.getDate()} ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+
+                const cardHtml = `
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-emerald-50 flex flex-col justify-between hover:shadow-md transition duration-200">
+                        <div class="mb-4">
+                            <h3 class="font-bold text-lg text-gray-800 mb-1 leading-tight">${escapeHTML(book.title)}</h3>
+                            <div class="flex items-center text-sm text-gray-600 gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                <span class="${isMyBorrow ? 'font-bold text-emerald-600' : ''}">${escapeHTML(book.borrowerName)}</span>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">貸出日: ${dateStr}</div>
+                        </div>
+                        <button onclick="window.returnBook('${book.id}')" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold py-2 px-4 rounded-lg transition border border-emerald-200 shadow-sm flex justify-center items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                            返却する
+                        </button>
+                    </div>
+                `;
+                booksContainer.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        }
     </script>
 </body>
 </html>
